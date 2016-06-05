@@ -48,6 +48,17 @@ public class Recognition : MonoBehaviour {
     List<Vector2> points;
     List<Vector2> newPoints;
     // Use this for initialization
+    enum Directions
+    {
+        NN,
+        NE,
+        EE,
+        SE,
+        SS,
+        SW,
+        WW,
+        NW,
+    }
     void Start() {
         points = new List<Vector2>();
         newPoints = new List<Vector2>();
@@ -205,6 +216,5 @@ public class Recognition : MonoBehaviour {
             f += item;
 
         }
-        int s = 2;
     }    
 }
