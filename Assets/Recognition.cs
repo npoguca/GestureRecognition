@@ -59,6 +59,10 @@ public class Recognition : MonoBehaviour {
         WW,
         NW,
     }
+    void CalculateTangent(float angle)
+    {
+        Mathf.Tan(angle);
+    }
     void Start() {
         points = new List<Vector2>();
         newPoints = new List<Vector2>();
