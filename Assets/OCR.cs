@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
+using UnityEngine.UI;
+
 public class OCR : MonoBehaviour
 {
     public int cleaningRange;
@@ -12,6 +14,7 @@ public class OCR : MonoBehaviour
     bool activateOCR { get; set; }
     Vector2 defaultPos { get; set; }
     public List<float> scheme { get; set; }
+    List<Scheme> schemes { get; set; }
     // Use this for initialization
 
     void Start()
@@ -19,6 +22,8 @@ public class OCR : MonoBehaviour
         frequency = 3f;
         defaultPos = new Vector2();
         scheme = new List<float>();
+        schemes = new List<Scheme>();
+        LoadData();
     }
     private float SidesToAngle(float x, float y)
     {
@@ -30,14 +35,13 @@ public class OCR : MonoBehaviour
         float side = (float)System.Math.Tan((double)rads) * frequency;
         return side;
     }
-    
-    private void DrawScheme()
+    private void DrawScheme(Scheme scheme)
     {
         float angle = 0f;
         float side = 0f;
         Vector2 finalPoint = new Vector2();
         Vector2 startPoint = drawPos;
-        foreach (var item in scheme)
+        foreach (var item in scheme.serializableScheme)
         {
 
 
@@ -94,7 +98,7 @@ public class OCR : MonoBehaviour
         }
 
     }
-    private void CalculateAngle(Vector2 defaultPos, Vector2 currentPos)
+    private float CalculateAngle(Vector2 defaultPos, Vector2 currentPos)
     {
         float tg = 0f;
         float x = currentPos.x - defaultPos.x;
@@ -148,63 +152,121 @@ public class OCR : MonoBehaviour
         Debug.DrawLine(new Vector2(defaultPos.x, defaultPos.y), new Vector2(currentPos.x, defaultPos.y), Color.green, 2, false);
         Debug.DrawLine(new Vector2(currentPos.x, defaultPos.y), new Vector2(currentPos.x, currentPos.y), Color.green, 2, false);
         Debug.DrawLine(defaultPos, currentPos, Color.green, 2, false);
+        return tg;
 
     }
-    IEnumerator Recognize()
+    private bool MouseMoved()
+    {
+        //I feel dirty even doing this 
+        return (Input.GetAxis("Mouse X") != 0) || (Input.GetAxis("Mouse Y") != 0);
+    }
+    IEnumerator Tangent()
     {
         Vector2 defaultPos = Input.mousePosition;
         drawPos = defaultPos;
         Vector2 currentPos = new Vector2();
-        captureDuration = Time.deltaTime*1f;
+        captureDuration = Time.deltaTime*6f;
         while (activateOCR)
         {
-            //if (captureDuration > 0)
-            //{
-            //    captureDuration -= Time.deltaTime;
-            //}
+            if (captureDuration > 0)
+            {
+                currentPos = Input.mousePosition;
+                defaultPos = currentPos;
+                scheme.Add(CalculateAngle(defaultPos, currentPos));
+
+                captureDuration -= Time.deltaTime;
+
+            }
+            yield return null;
+
             //else
             //{
-                currentPos = Input.mousePosition;
-                CalculateAngle(defaultPos, currentPos);
-                defaultPos = currentPos;
+            //if (MouseMoved())
+            //{
+
             //}
-            yield return null;
+
+            //}
         }
     }
-    private void schemeCleaner()
+    private Scheme schemeCleaner(Scheme scheme)
     {
 
 
-        for (var i = 1; i < scheme.Count/2; i++)
+        for (var i = 0; i < scheme.serializableScheme.Count/2; i++)
         {
 
-            if (System.Math.Abs(scheme[i] - scheme[i + 2]) < cleaningRange)
+            if (System.Math.Abs(scheme.serializableScheme[i] - scheme.serializableScheme[i + 2]) < 15)
             {
-                scheme[i+1] = (scheme[i]+scheme[i+2])/2;
+                scheme.serializableScheme[i+1] = (scheme.serializableScheme[i]+scheme.serializableScheme[i+2])/2;
             }
         }
-        for (var i = 1; i< scheme.Count-1; i++)
-        {
+        //for (var i = 1; i< scheme.serializableScheme.Count-1; i++)
+        //{
             
-            if (System.Math.Abs(scheme[i] - scheme[i-1]) < cleaningRange)
-            {
-                scheme[i] = -1f;
-            }
-        }
-        scheme.RemoveAll(x => x == -1);
+        //    if (System.Math.Abs(scheme.serializableScheme[i] - scheme.serializableScheme[i-1]) < cleaningRange)
+        //    {
+        //        scheme.serializableScheme[i] = -1f;
+        //    }
+        //}
+        //scheme.serializableScheme.RemoveAll(x => x == -1);
+        return scheme;
     }
     private void LoadData()
     {
-        FileStream file = File.Open(Application.persistentDataPath + "/new.dat", FileMode.Open);
+        DirectoryInfo di = new DirectoryInfo((Application.persistentDataPath));
+        FileInfo[] files = di.GetFiles("*.dat");
+        foreach (var item in files)
+        {
+            FileStream file = File.Open(item.FullName, FileMode.Open);
+            BinaryFormatter bf = new BinaryFormatter();
+            Scheme sch = (Scheme)bf.Deserialize(file);
+            file.Close();
+            DrawScheme(sch);
+            sch = schemeCleaner(sch);
+            sch.serializableScheme = Optimize(sch);
+            schemes.Add(sch);
+            DrawScheme(sch);
+        }
+        
+    }
+    public void SaveData()
+    {
+        InputField inputs = GameObject.Find("Canvas").GetComponentInChildren<InputField>();
+        Scheme sch = new Scheme();
+        sch.name = inputs.text;
+        sch.serializableScheme = scheme;
         BinaryFormatter bf = new BinaryFormatter();
-        Data dt = (Data)bf.Deserialize(file);
+        FileStream file = File.Create(Application.persistentDataPath + sch.name + "/.dat");
+        bf.Serialize(file, sch);
         file.Close();
-        string name = dt.name;
-       //scheme = dt.serializableScheme;
-        schemeCleaner();
-        DrawScheme();
+    }
+
+    public void Reconize()
+    {
+        foreach (var item in schemes)
+        {
+            foreach (var i in item.serializableScheme)
+            {
+                
+            }
+        }
 
     }
+    private List<float> Optimize(Scheme sch)
+    {
+        int startingPoint = 0;
+        List<float> optimized = sch.serializableScheme;
+        for (int i = 0; i < optimized.Count; i++)
+        {
+            if (System.Math.Abs(optimized[i]-optimized[startingPoint])>45)
+            {
+                optimized[i] = 9999f;
+            }
+        }
+        return optimized;
+    }
+
     // Update is called once per frame
     void Update()
     {
@@ -212,31 +274,25 @@ public class OCR : MonoBehaviour
         {
             scheme.Clear();
             activateOCR = true;
-            StopCoroutine(Recognize());
-            StartCoroutine(Recognize());
+            StopCoroutine(Tangent());
+            StartCoroutine(Tangent());
             Debug.Log(defaultPos);
 
         }
+        
         if (Input.GetMouseButtonUp(0))
         {
             activateOCR = false;
-            schemeCleaner();
-            DrawScheme();
-            BinaryFormatter bf = new BinaryFormatter();
-            FileStream file = File.Create(Application.persistentDataPath + "/new.dat");
-            Data dt = new Data();
-            dt.serializableScheme = scheme;
-            dt.name = "air";
-            bf.Serialize(file, dt);
-            file.Close();
-         }
-        LoadData();
+            //SaveData();
+            //DrawScheme(scheme);
+               
+        }
 
     }
     
 }
 [System.Serializable()]
-class Data
+class Scheme
 {
     public string name;
     public List<float> serializableScheme;
